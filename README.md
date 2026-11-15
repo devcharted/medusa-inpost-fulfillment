@@ -345,12 +345,18 @@ The InPost Returns REST API exposes return ticket lookup through the list endpoi
 
 A timeout does not mean ShipX did not create the shipment. If `createShipment` (or the buy that follows) times out after ShipX has accepted it, the fulfillment fails, and a retry of **Create fulfillment** would create a second shipment for the same order.
 
-So before creating a shipment, the plugin looks for one that already exists for the order: same `reference` (the order ID), any status other than `canceled`. ShipX's shipment list has no `reference` filter, so the lookup narrows by the receiver's e-mail and by creation time (from a day before the order) and matches `reference` on the result, up to 10 pages.
+So before creating a shipment, the plugin looks for one that already exists for the order: same `reference` (the order ID) and a status that is not final. A `delivered`, `canceled` or `returned_to_sender` shipment can't be left over from a retry, so it doesn't count: a re-shipment or an exchange under the same order ID goes through once the earlier shipment is final. ShipX's shipment list has no `reference` filter, so the lookup narrows by the receiver's e-mail and by creation time (from a day before the order) and matches `reference` on the result, up to 10 pages.
 
-- **A shipment is found:** the fulfillment fails with a `duplicate_error` that names the shipment ID and status. Buy or cancel that shipment in [InPost Manager](https://manager.paczkomaty.pl) instead of creating another one. The plugin does not reuse it on its own.
+- **A shipment is found:** the fulfillment fails with a `duplicate_error` that names the shipment ID and status and points to `duplicateCheck: false`. Buy or cancel that shipment in [InPost Manager](https://manager.paczkomaty.pl) instead of creating another one. The plugin does not reuse it on its own.
 - **The lookup fails** (timeout, API error, more than 10 pages): the fulfillment fails too, and no shipment is created.
 
-If you fulfil one order in several InPost shipments, the check sees the earlier shipment as a duplicate, because partial fulfillments share the order's `reference`. Set `duplicateCheck: false` in that case, or if you run a check of your own.
+The check also refuses a new shipment in these cases, as long as the earlier shipment for the order is not final:
+
+- **One order in several InPost shipments.** Partial fulfillments share the order's `reference`, so each one after the first is seen as a duplicate.
+- **A re-shipment or an exchange under the same order ID** while the earlier shipment is still on its way.
+- **A fulfillment canceled in Medusa after its shipment was confirmed.** Medusa then cancels it locally only (see [Cancellation](#cancellation)), and the shipment stays active in ShipX. A replacement fulfillment, for example to change the locker, fails with `duplicate_error` until the shipment is canceled in InPost Manager (or WebTrucker for courier shipments).
+
+Set `duplicateCheck: false` if you ship one order in several InPost shipments, or if you run a check of your own.
 
 When a fulfillment fails after the shipment was created (offers, buy, or the courier dispatch order), the error log names the shipment ID.
 

@@ -1,4 +1,5 @@
 import { MedusaError } from "@medusajs/framework/utils"
+import { INPOST_FINAL_SHIPMENT_STATUSES } from "./admin-shipments"
 import { InPostShipmentListResponse } from "./types"
 
 /** Past this many pages the check gives up and refuses, rather than guessing. */
@@ -6,14 +7,18 @@ export const DUPLICATE_CHECK_MAX_PAGES = 10
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
+const FINAL_STATUSES: readonly string[] = INPOST_FINAL_SHIPMENT_STATUSES
+
 type ListShipments = (
   query: Record<string, string | number>
 ) => Promise<InPostShipmentListResponse>
 
 /**
- * Throws when ShipX already has a shipment that is not canceled for this
- * `reference`, and when that cannot be checked (the lookup fails or runs past
- * the page cap). It never reuses the shipment it finds.
+ * Throws when ShipX already has a shipment for this `reference` that is not in
+ * a final status, and when that cannot be checked (the lookup fails or runs
+ * past the page cap). It never reuses the shipment it finds. A delivered,
+ * canceled or returned shipment cannot be the leftover of a retry, so a
+ * re-shipment under the same order passes.
  *
  * ShipX's list has no `reference` filter, so the lookup narrows by the
  * receiver's e-mail (a prefix match) and by creation time (a day before the
@@ -57,7 +62,7 @@ export async function assertNoExistingShipment(
 
     const items = result.items ?? []
     existing.push(
-      ...items.filter((s) => s.reference === reference && s.status !== "canceled")
+      ...items.filter((s) => s.reference === reference && !FINAL_STATUSES.includes(s.status))
     )
 
     if (!items.length || page * (result.per_page || items.length) >= (result.count ?? 0)) {
@@ -70,7 +75,7 @@ export async function assertNoExistingShipment(
       MedusaError.Types.DUPLICATE_ERROR,
       `InPost fulfillment: ShipX already has a shipment for ${reference}: ${existing
         .map((s) => `${s.id} (${s.status})`)
-        .join(", ")}. Buy or cancel it in InPost Manager instead of creating another one.`
+        .join(", ")}. Buy or cancel it in InPost Manager instead of creating another one. If you ship this order in several InPost shipments, set \`duplicateCheck: false\` in the plugin options.`
     )
   }
 }

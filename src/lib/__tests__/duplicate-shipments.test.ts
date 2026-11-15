@@ -55,6 +55,7 @@ describe("assertNoExistingShipment", () => {
     await assert.rejects(assertNoExistingShipment(list, params), (error: Error & { type?: string }) => {
       assert.equal(error.type, "duplicate_error")
       assert.match(error.message, /42 \(created\)/)
+      assert.match(error.message, /set `duplicateCheck: false` in the plugin options/)
       return true
     })
   })
@@ -62,6 +63,14 @@ describe("assertNoExistingShipment", () => {
   it("ignores a canceled shipment and shipments of other orders", async () => {
     const { list } = mockList([
       page([shipment(1, "order_1", "canceled"), shipment(2, "order_10", "confirmed")]),
+    ])
+
+    await assertNoExistingShipment(list, params)
+  })
+
+  it("ignores a delivered and a returned shipment, so a re-shipment under the same order passes", async () => {
+    const { list } = mockList([
+      page([shipment(1, "order_1", "delivered"), shipment(2, "order_1", "returned_to_sender")]),
     ])
 
     await assertNoExistingShipment(list, params)
