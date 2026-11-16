@@ -23,8 +23,9 @@ export interface InPostPluginOptions {
   offerPollIntervalMs?: number
   /**
    * Before creating a shipment, `createFulfillment` looks for a shipment that
-   * already exists on ShipX for the same order (same `reference`, not
-   * canceled) and refuses to create a second one. Default: `true`.
+   * already exists on ShipX for the same order (same `reference`, not in a
+   * final status - delivered, canceled, returned_to_sender) and refuses to
+   * create a second one. Default: `true`.
    *
    * Set it to `false` if you fulfil one order in several InPost shipments
    * (partial fulfillments share the order's `reference`, so the check cannot
